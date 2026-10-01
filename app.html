@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TalkTime - Speech length calculator</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; background:#1d1a14; color:#f4efe2; line-height:1.5; }
+  .wrap { max-width:640px; margin:0 auto; padding:26px 18px 60px; }
+  a { color:#ffcf5c; } h1 { font-size:28px; } h1 span { color:#ffcf5c; } .sub { color:#b9b09a; margin:4px 0 18px; }
+  .card { background:#2b271d; border-radius:14px; padding:16px; margin-bottom:14px; }
+  label { display:block; font-size:13px; color:#b9b09a; margin:10px 0 4px; }
+  input, select, textarea { width:100%; padding:11px; border-radius:9px; border:1px solid #4d4630; background:#1d1a14; color:#f4efe2; font-size:16px; font-family:inherit; }
+  textarea { min-height:140px; resize:vertical; }
+  .row { display:flex; gap:10px; } .row > div { flex:1; }
+  .seg { display:flex; gap:8px; } .seg button { flex:1; padding:10px; border-radius:9px; border:1px solid #4d4630; background:#1d1a14; color:#b9b09a; font-size:14px; cursor:pointer; } .seg button.on { background:#ffcf5c; color:#1d1a14; font-weight:700; border-color:#ffcf5c; }
+  .big { font-size:44px; font-weight:800; color:#ffcf5c; } .lbl { font-size:13px; color:#b9b09a; }
+  table { width:100%; border-collapse:collapse; font-size:15px; margin-top:12px; } td, th { padding:8px 4px; border-bottom:1px solid #3a3526; text-align:left; } th { color:#b9b09a; font-weight:600; font-size:13px; } tr.sel td { color:#ffcf5c; font-weight:700; }
+  h2 { font-size:17px; margin-bottom:8px; } .small { font-size:13px; color:#b9b09a; } .note { font-size:14px; color:#e2dac6; margin-top:10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Talk<span>Time</span></h1>
+  <div class="sub">How long will your script take to say out loud, or how many words fit your time slot?</div>
+  <div class="card">
+    <div class="seg" id="mode"><button data-v="text" class="on">I have a script</button><button data-v="slot">I have a time slot</button></div>
+    <div id="textui"><label for="txt">Paste your script</label><textarea id="txt" placeholder="Paste text here. It stays in your browser."></textarea></div>
+    <div id="slotui" style="display:none"><label for="mins">Time slot (minutes, like 10 or 7:30)</label><input id="mins" type="text" value="10"></div>
+    <div class="row"><div><label for="pace">Speaking pace</label><select id="pace"><option value="110">Slow, 110 wpm</option><option value="130" selected>Average, 130 wpm</option><option value="150">Fast, 150 wpm</option><option value="170">Rapid, 170 wpm</option></select></div><div><label for="pause">Pauses and slide changes (%)</label><input id="pause" type="number" min="0" max="50" value="0"></div></div>
+  </div>
+  <div class="card" id="out"></div>
+  <div class="card"><h2>About this</h2><div class="small">Time = words &divide; words per minute. 130 wpm is the commonly cited average for formal speech, 125 to 150 is normal conversation; a 10-minute speech is about 1,300 words, or 1,100 to 1,700 from slow to rapid. Matches the published tables at <a href="https://wordstotime.netlify.app/word-to-presentation-time/">wordstotime</a> (500 words is 4m 0s at 125 wpm, 3m 51s at 130). Add 10 to 15% for slide transitions. Read it aloud once with a stopwatch, because real pace varies with nerves and audience. <a href="index.html">About</a></div></div>
+</div>
+<script src="engine.js"></script>
+<script>
+var $ = function (i) { return document.getElementById(i); }, mode = 'text';
+Array.prototype.forEach.call($('mode').querySelectorAll('button'), function (b) { b.onclick = function () { Array.prototype.forEach.call($('mode').querySelectorAll('button'), function (x) { x.className = ''; }); b.className = 'on'; mode = b.getAttribute('data-v'); $('textui').style.display = mode === 'text' ? '' : 'none'; $('slotui').style.display = mode === 'slot' ? '' : 'none'; render(); }; });
+function render() {
+  var wpm = parseInt($('pace').value, 10), pause = (parseFloat($('pause').value) || 0) / 100, h;
+  if (mode === 'text') {
+    var w = Talk.countWords($('txt').value);
+    if (!w) { $('out').innerHTML = '<div class="lbl">Paste some text to see how long it takes.</div>'; return; }
+    h = '<div class="lbl">' + w + ' words at ' + wpm + ' wpm</div><div class="big" id="time">' + Talk.fmt(Talk.seconds(w, wpm, pause)) + '</div><table><tr><th>Pace</th><th>Time</th></tr>';
+    Object.keys(Talk.PACES).forEach(function (k) { var r = Talk.PACES[k]; h += '<tr' + (r === wpm ? ' class="sel"' : '') + '><td>' + k[0].toUpperCase() + k.slice(1) + ' (' + r + ' wpm)</td><td>' + Talk.fmt(Talk.seconds(w, r, pause)) + '</td></tr>'; });
+    h += '</table>';
+  } else {
+    var m = Talk.parseMinutes($('mins').value);
+    if (m == null) { $('out').innerHTML = '<div class="lbl">Enter minutes like 10 or 7:30.</div>'; return; }
+    h = '<div class="lbl">Words that fit ' + m + ' minutes at ' + wpm + ' wpm</div><div class="big" id="words">' + Talk.wordsFor(m, wpm, pause).toLocaleString('en-US') + ' words</div><table><tr><th>Pace</th><th>Words</th></tr>';
+    Object.keys(Talk.PACES).forEach(function (k) { var r = Talk.PACES[k]; h += '<tr' + (r === wpm ? ' class="sel"' : '') + '><td>' + k[0].toUpperCase() + k.slice(1) + ' (' + r + ' wpm)</td><td>' + Talk.wordsFor(m, r, pause).toLocaleString('en-US') + '</td></tr>'; });
+    h += '</table>';
+  }
+  $('out').innerHTML = h + '<div class="note">Aim a little under the limit; going over is worse than finishing early.</div>';
+}
+['txt', 'mins', 'pace', 'pause'].forEach(function (i) { $(i).oninput = render; $(i).onchange = render; });
+render();
+</script>
+</body>
+</html>
